@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guillotine Watch — Andrew's Acquaintances</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --field:#152018; --field-2:#1C2A21; --line:#33443A; --ink:#EFEDE3; --muted:#9FAB9C;
+  --panel:#1C2A21; --safe:#D9C27A; --mid:#C98B4A; --danger:#C24A3E; --gone:#5C6A5E;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--field);color:var(--ink);font-family:"Work Sans",system-ui,sans-serif;line-height:1.45}
+.wrap{max-width:1100px;margin:0 auto;padding:40px 24px 80px}
+h1,h2,.num{font-family:Oswald,"Arial Narrow",sans-serif}
+header{border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:32px}
+.eyebrow{color:var(--danger);font-weight:600;font-size:.9rem;letter-spacing:.03em;margin-bottom:8px}
+h1{font-size:clamp(2rem,5vw,3.1rem);margin:0 0 12px;font-weight:600;letter-spacing:-.01em}
+header p{margin:0;color:var(--muted);max-width:64ch;font-size:1.05rem}
+h2{font-size:1.5rem;font-weight:600;margin:0 0 16px}
+section{margin-top:48px}
+
+.chartcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px 20px 8px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+.gridline{stroke:var(--line);stroke-width:1}
+.axislabel{fill:var(--muted);font-size:12px;font-family:"Work Sans",sans-serif}
+.teamline{fill:none;stroke:var(--muted);stroke-width:1.4;opacity:.45;transition:opacity .15s, stroke-width .15s}
+.teamline.hot{opacity:1;stroke:var(--ink);stroke-width:2.6}
+.cutline{fill:none;stroke:var(--danger);stroke-width:1.6;stroke-dasharray:5 5;opacity:.85}
+.dot{cursor:pointer}
+.eliminated-mark{stroke:var(--gone);stroke-width:2.5}
+.taglabel{font-size:12px;fill:var(--muted);font-family:"Work Sans",sans-serif}
+.taglabel.hot{fill:var(--ink);font-weight:600}
+
+#tooltip{position:fixed;pointer-events:none;background:#0E1712;border:1px solid var(--line);border-radius:8px;
+  padding:10px 12px;font-size:.88rem;color:var(--ink);opacity:0;transition:opacity .1s;z-index:5;max-width:220px}
+#tooltip b{font-family:Oswald,sans-serif;font-weight:600;display:block;margin-bottom:2px}
+#tooltip .m{color:var(--muted)}
+
+.legend{display:flex;gap:20px;flex-wrap:wrap;align-items:center;margin:18px 2px 0;font-size:.85rem;color:var(--muted)}
+.legend .sw{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+
+.board{display:flex;flex-direction:column;gap:2px}
+.row{display:grid;grid-template-columns:34px 1fr 90px 110px;gap:12px;align-items:center;
+  padding:11px 14px;border-radius:6px;background:var(--panel);border:1px solid var(--line)}
+.row.out{opacity:.55}
+.rank{font-family:Oswald,sans-serif;font-weight:600;font-size:1.2rem;color:var(--muted)}
+.tname{font-weight:500}
+.tname small{display:block;color:var(--muted);font-weight:400;font-size:.8rem;margin-top:1px}
+.score{font-family:Oswald,sans-serif;font-size:1.25rem;text-align:right}
+.margin{text-align:right;font-size:.92rem}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:600;color:#12190F}
+.weeksel{display:flex;gap:8px;margin-bottom:14px}
+.weeksel button{font:inherit;font-family:"Work Sans",sans-serif;font-size:.9rem;background:transparent;color:var(--muted);
+  border:1px solid var(--line);border-radius:6px;padding:6px 14px;cursor:pointer}
+.weeksel button[aria-pressed="true"]{background:var(--ink);color:#12190F;border-color:var(--ink);font-weight:600}
+footer{margin-top:56px;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:20px}
+footer p{max-width:74ch;margin:0 0 8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Andrew's Acquaintances · 19-team guillotine, 2026</div>
+  <h1>Guillotine Watch</h1>
+  <p>Weekly points for every team, and how far each one sat above the cutoff — the low score that gets a team eliminated. The dashed line traces that cutoff week to week.</p>
+</header>
+
+<section aria-labelledby="ct">
+  <h2 id="ct">Points by week</h2>
+  <div class="chartcard">
+    <svg id="chart" viewBox="0 0 1040 460" role="img" aria-label="Line chart of each team's weekly fantasy points, with a dashed line marking each week's elimination cutoff"></svg>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--danger)"></span>right at the cutoff</span>
+      <span><span class="sw" style="background:var(--mid)"></span>in range of it</span>
+      <span><span class="sw" style="background:var(--safe)"></span>comfortably clear</span>
+      <span><span class="sw" style="background:var(--gone)"></span>eliminated</span>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="db">
+  <h2 id="db">The board</h2>
+  <div class="weeksel" id="weeksel" role="group" aria-label="Choose a week"></div>
+  <div class="board" id="board"></div>
+</section>
+
+<footer>
+  <p>Scores are Sleeper's weekly totals under this league's scoring. A team's line stops the week it posts the season's lowest score among teams still alive — that's the guillotine. Margin is that team's cushion above the current week's cutoff.</p>
+  <p>Updated through week 2. To add a week, edit <code>data.js</code>.</p>
+</footer>
+
+</div>
+<div id="tooltip"></div>
+<script src="data.js"></script>
+<script>
+const { weeks, teams, points } = LEAGUE_DATA;
+const teamIds = Object.keys(teams);
+
+// ---- derive per-week cutoffs, margins, elimination state ----
+const cutoff = weeks.map((_, wi) => {
+  const alive = teamIds.map(id => points[id][wi]).filter(v => v !== null && v !== undefined);
+  return Math.min(...alive);
+});
+const lastAliveWeek = {}; // index of last week a team has a score
+teamIds.forEach(id => {
+  let last = -1;
+  points[id].forEach((v, wi) => { if (v !== null && v !== undefined) last = wi; });
+  lastAliveWeek[id] = last;
+});
+const isEliminatedAt = (id, wi) => {
+  const last = lastAliveWeek[id];
+  return last < weeks.length - 1 && wi === last; // their final scored week
+};
+
+function colorFor(margin, weekIdx) {
+  const spread = Math.max(1, Math.max(...teamIds.map(id => points[id][weekIdx]).filter(v=>v!=null)) - cutoff[weekIdx]);
+  const t = Math.max(0, Math.min(1, margin / spread));
+  // crimson -> amber -> gold
+  const stops = [[194,74,62],[201,139,74],[217,194,122]];
+  const seg = t < .5 ? [stops[0],stops[1],t/.5] : [stops[1],stops[2],(t-.5)/.5];
+  const [a,b,f] = seg;
+  const mix = a.map((c,i)=>Math.round(c+(b[i]-c)*f));
+  return `rgb(${mix[0]},${mix[1]},${mix[2]})`;
+}
+
+// ---- chart geometry ----
+const svg = document.getElementById('chart');
+const W = 1040, H = 460, padL = 46, padR = 24, padT = 20, padB = 40;
+const plotW = W - padL - padR, plotH = H - padT - padB;
+const allScores = teamIds.flatMap(id => points[id].filter(v => v != null));
+const yMin = 0, yMax = Math.ceil(Math.max(...allScores) / 10) * 10 + 10;
+const x = wi => padL + (weeks.length === 1 ? plotW/2 : (plotW * wi) / (weeks.length - 1));
+const y = v => padT + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+
+let svgHTML = '';
+// gridlines + y labels
+const ySteps = 6;
+for (let i = 0; i <= ySteps; i++) {
+  const val = yMin + ((yMax - yMin) * i) / ySteps;
+  const yy = y(val);
+  svgHTML += `<line class="gridline" x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}"/>`;
+  svgHTML += `<text class="axislabel" x="${padL-10}" y="${yy+4}" text-anchor="end">${Math.round(val)}</text>`;
+}
+weeks.forEach((wnum, wi) => {
+  svgHTML += `<text class="axislabel" x="${x(wi)}" y="${H-14}" text-anchor="middle">Week ${wnum}</text>`;
+});
+
+// cutoff line
+const cutPath = cutoff.map((c, wi) => `${wi===0?'M':'L'}${x(wi)},${y(c)}`).join(' ');
+svgHTML += `<path class="cutline" d="${cutPath}"/>`;
+
+// team lines
+teamIds.forEach(id => {
+  const pts = points[id];
+  let d = '';
+  pts.forEach((v, wi) => {
+    if (v == null) return;
+    d += (d === '' ? 'M' : 'L') + `${x(wi)},${y(v)} `;
+  });
+  svgHTML += `<path class="teamline" data-team="${id}" d="${d.trim()}"/>`;
+});
+
+// dots (drawn after lines so they sit on top) + end labels
+teamIds.forEach(id => {
+  const pts = points[id];
+  pts.forEach((v, wi) => {
+    if (v == null) return;
+    const margin = v - cutoff[wi];
+    const col = colorFor(margin, wi);
+    const eliminated = isEliminatedAt(id, wi);
+    const r = eliminated ? 6 : 4;
+    svgHTML += `<circle class="dot" data-team="${id}" data-week="${wi}" cx="${x(wi)}" cy="${y(v)}" r="${r}" fill="${eliminated ? 'var(--gone)' : col}" stroke="${eliminated ? 'var(--ink)' : 'none'}" stroke-width="${eliminated?1.5:0}"/>`;
+  });
+  const last = lastAliveWeek[id];
+  if (last === weeks.length - 1) {
+    svgHTML += `<text class="taglabel" data-team="${id}" x="${x(last)+8}" y="${y(pts[last])+4}">${teams[id].split(' ').slice(0,2).join(' ')}</text>`;
+  }
+});
+
+svg.innerHTML = svgHTML;
+
+// ---- interactivity: hover highlights a team's line + labels, shows tooltip ----
+const tooltip = document.getElementById('tooltip');
+function setHot(id) {
+  svg.querySelectorAll('.teamline').forEach(p => p.classList.toggle('hot', p.dataset.team === id));
+  svg.querySelectorAll('.taglabel').forEach(t => t.classList.toggle('hot', t.dataset.team === id));
+}
+svg.addEventListener('pointerover', e => {
+  const el = e.target.closest('[data-team]');
+  if (!el) return;
+  setHot(el.dataset.team);
+});
+svg.addEventListener('pointerleave', () => { setHot(null); tooltip.style.opacity = 0; });
+svg.addEventListener('pointermove', e => {
+  const dot = e.target.closest('.dot');
+  if (!dot) { tooltip.style.opacity = 0; return; }
+  const id = dot.dataset.team, wi = +dot.dataset.week;
+  const v = points[id][wi], margin = v - cutoff[wi];
+  const eliminated = isEliminatedAt(id, wi);
+  tooltip.innerHTML = `<b>${teams[id]}</b>Week ${weeks[wi]}: ${v.toFixed(2)} pts<div class="m">${eliminated ? 'Eliminated — lowest score of the week' : (margin < 0.01 ? 'Lowest score this week' : margin.toFixed(2) + ' above the cutoff')}</div>`;
+  tooltip.style.left = (e.clientX + 16) + 'px';
+  tooltip.style.top = (e.clientY + 16) + 'px';
+  tooltip.style.opacity = 1;
+});
+
+// ---- board: ranked list for a chosen week ----
+const weekSel = document.getElementById('weeksel');
+const board = document.getElementById('board');
+weeks.forEach((wnum, wi) => {
+  const b = document.createElement('button');
+  b.textContent = 'Week ' + wnum;
+  b.type = 'button';
+  b.setAttribute('aria-pressed', wi === weeks.length - 1);
+  b.addEventListener('click', () => {
+    [...weekSel.children].forEach(c => c.setAttribute('aria-pressed', c === b));
+    renderBoard(wi);
+  });
+  weekSel.appendChild(b);
+});
+
+function renderBoard(wi) {
+  const rows = teamIds
+    .filter(id => points[id][wi] != null)
+    .map(id => {
+      const v = points[id][wi];
+      const margin = v - cutoff[wi];
+      const eliminated = isEliminatedAt(id, wi);
+      return { id, v, margin, eliminated };
+    })
+    .sort((a, b) => a.v - b.v);
+
+  board.innerHTML = rows.map((r, i) => {
+    const col = r.eliminated ? 'var(--gone)' : colorFor(r.margin, wi);
+    const status = r.eliminated ? 'Eliminated' : (r.margin < 0.01 ? 'On the chopping block' : (r.margin < (Math.max(...teamIds.map(id=>points[id][wi]).filter(v=>v!=null)) - cutoff[wi]) * 0.18 ? 'In range' : 'Clear'));
+    return `<div class="row ${r.eliminated ? 'out' : ''}">
+      <div class="rank">${i + 1}</div>
+      <div class="tname">${teams[r.id]}<small>${status}</small></div>
+      <div class="score">${r.v.toFixed(2)}</div>
+      <div class="margin"><span class="pill" style="background:${col}">${r.eliminated ? '—' : '+' + r.margin.toFixed(2)}</span></div>
+    </div>`;
+  }).join('');
+}
+renderBoard(weeks.length - 1);
+</script>
+</body>
+</html>
