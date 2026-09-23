@@ -58,7 +58,7 @@ if ($pyExit -ne 0) {
 if ($DryRun) { Write-Log 'Dry run complete.'; exit 0 }
 
 # Only the generated files are ever committed by the automation.
-$tracked = @('data.js', 'README.md')
+$tracked = @('data.js', 'lineups.js', 'README.md')
 $status = cmd /c "git -C `"$repo`" status --porcelain -- $($tracked -join ' ') 2>&1"
 if ([string]::IsNullOrWhiteSpace($status)) {
     Write-Log 'No change to commit -- already current.'

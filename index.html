@@ -59,6 +59,40 @@ svg{width:100%;height:auto;display:block;overflow:visible}
 .weeksel button[aria-pressed="true"]{background:var(--ink);color:#12190F;border-color:var(--ink);font-weight:600}
 footer{margin-top:56px;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:20px}
 footer p{max-width:74ch;margin:0 0 8px}
+
+/* ---- lineup sheet ---- */
+.row{cursor:pointer;transition:border-color .12s,background .12s}
+.row:hover{border-color:var(--muted);background:#22312750}
+.row:focus-visible{outline:2px solid var(--safe);outline-offset:2px}
+.dot{cursor:pointer}
+.hint{color:var(--muted);font-size:.85rem;margin:0 2px 14px}
+
+#sheet{position:fixed;inset:0;background:rgba(8,14,10,.74);z-index:10;
+  display:none;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto}
+#sheet.open{display:flex}
+.sheetbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  width:min(560px,100%);padding:24px 24px 20px;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+.sheetbox h3{font-family:Oswald,sans-serif;font-weight:600;font-size:.95rem;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+#sheetclose{position:absolute;top:14px;right:14px;background:transparent;border:1px solid var(--line);
+  color:var(--muted);border-radius:6px;width:30px;height:30px;font-size:1.1rem;line-height:1;cursor:pointer}
+#sheetclose:hover{color:var(--ink);border-color:var(--muted)}
+.sheethead{border-bottom:1px solid var(--line);padding-bottom:16px;padding-right:40px}
+.sheethead h2{margin:4px 0 6px;font-size:1.45rem}
+.sheettotal{font-family:Oswald,sans-serif;font-size:1.05rem;color:var(--muted)}
+.sheettotal b{color:var(--ink);font-size:1.6rem;margin-right:4px}
+.sheetstatus{display:inline-block;margin-left:10px;padding:3px 10px;border-radius:999px;
+  font-family:"Work Sans",sans-serif;font-size:.74rem;font-weight:600;color:#12190F;vertical-align:3px}
+.lineup{width:100%;border-collapse:collapse;font-size:.92rem}
+.lineup td{padding:7px 0;border-bottom:1px solid #2A3830}
+.lineup tr:last-child td{border-bottom:none}
+.lineup .slot{font-family:Oswald,sans-serif;color:var(--muted);font-size:.82rem;width:52px;letter-spacing:.03em}
+.lineup .who small{color:var(--muted);font-weight:400;margin-left:6px;font-size:.8rem}
+.lineup .pts{text-align:right;font-family:Oswald,sans-serif;font-size:1.05rem;width:64px}
+.lineup .empty{color:var(--gone);font-style:italic}
+.lineup .best .pts{color:var(--safe)}
+.lineup .worst .pts{color:var(--danger)}
+.benchnote{color:var(--muted);font-size:.85rem;margin:10px 0 0}
 </style>
 </head>
 <body>
@@ -86,6 +120,7 @@ footer p{max-width:74ch;margin:0 0 8px}
 <section aria-labelledby="db">
   <h2 id="db">The board</h2>
   <div class="weeksel" id="weeksel" role="group" aria-label="Choose a week"></div>
+  <p class="hint">Click any team — here or on the chart — for that week's lineup.</p>
   <div class="board" id="board"></div>
 </section>
 
@@ -95,8 +130,28 @@ footer p{max-width:74ch;margin:0 0 8px}
 </footer>
 
 </div>
+
+<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+  <div class="sheetbox">
+    <button id="sheetclose" type="button" aria-label="Close">&times;</button>
+    <div class="sheethead">
+      <div class="eyebrow" id="sheet-week"></div>
+      <h2 id="sheet-title"></h2>
+      <div class="sheettotal"><b id="sheet-total"></b> points <span id="sheet-status"></span></div>
+    </div>
+    <h3>Starters</h3>
+    <table class="lineup"><tbody id="sheet-starters"></tbody></table>
+    <div id="sheet-benchwrap">
+      <h3>Bench</h3>
+      <table class="lineup"><tbody id="sheet-bench"></tbody></table>
+      <p class="benchnote" id="sheet-benchnote"></p>
+    </div>
+  </div>
+</div>
+
 <div id="tooltip"></div>
 <script src="data.js"></script>
+<script src="lineups.js"></script>
 <script>
 const { weeks, teams, points } = LEAGUE_DATA;
 const teamIds = Object.keys(teams);
@@ -243,7 +298,8 @@ function renderBoard(wi) {
   board.innerHTML = rows.map((r, i) => {
     const col = r.eliminated ? 'var(--gone)' : colorFor(r.margin, wi);
     const status = r.eliminated ? 'Eliminated' : (r.margin < 0.01 ? 'On the chopping block' : (r.margin < (Math.max(...teamIds.map(id=>points[id][wi]).filter(v=>v!=null)) - cutoff[wi]) * 0.18 ? 'In range' : 'Clear'));
-    return `<div class="row ${r.eliminated ? 'out' : ''}">
+    return `<div class="row ${r.eliminated ? 'out' : ''}" data-team="${r.id}" data-week="${wi}"
+         role="button" tabindex="0" aria-label="${teams[r.id]}, week ${weeks[wi]} lineup">
       <div class="rank">${i + 1}</div>
       <div class="tname">${teams[r.id]}<small>${status}</small></div>
       <div class="score">${r.v.toFixed(2)}</div>
@@ -252,6 +308,100 @@ function renderBoard(wi) {
   }).join('');
 }
 renderBoard(weeks.length - 1);
+
+// ---- lineup sheet: who a team started that week, and what it scored ----
+const lineups = typeof LEAGUE_LINEUPS === 'undefined' ? {} : LEAGUE_LINEUPS;
+const sheet = document.getElementById('sheet');
+let lastFocus = null;
+
+const fmt = n => n.toFixed(2);
+
+function lineupRows(list, bestWorst) {
+  if (!list.length) return '<tr><td class="empty">Nobody.</td></tr>';
+  const scores = list.map(r => r[3]);
+  const hi = Math.max(...scores), lo = Math.min(...scores);
+  return list.map(([slot, name, nfl, pts]) => {
+    const empty = name === '(empty)';
+    let cls = '';
+    if (bestWorst && !empty && list.length > 1) {
+      if (pts === hi) cls = 'best'; else if (pts === lo) cls = 'worst';
+    }
+    return `<tr class="${cls}">
+      <td class="slot">${slot}</td>
+      <td class="who ${empty ? 'empty' : ''}">${name}${nfl && !empty ? `<small>${nfl}</small>` : ''}</td>
+      <td class="pts">${empty ? '—' : fmt(pts)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openLineup(id, wi) {
+  const week = weeks[wi];
+  const entry = (lineups[week] || {})[id];
+  const score = points[id][wi];
+  if (score == null) return; // eliminated before this week; nothing to show
+
+  document.getElementById('sheet-week').textContent = `Week ${week}`;
+  document.getElementById('sheet-title').textContent = teams[id];
+  document.getElementById('sheet-total').textContent = fmt(score);
+
+  const status = document.getElementById('sheet-status');
+  const margin = score - cutoff[wi];
+  if (isEliminatedAt(id, wi)) {
+    status.textContent = 'Eliminated';
+    status.style.background = 'var(--gone)';
+    status.style.color = 'var(--ink)';
+  } else {
+    status.textContent = `+${fmt(margin)} over the cutoff`;
+    status.style.background = colorFor(margin, wi);
+    status.style.color = '#12190F';
+  }
+
+  const starters = document.getElementById('sheet-starters');
+  const benchWrap = document.getElementById('sheet-benchwrap');
+  if (!entry) {
+    starters.innerHTML = '<tr><td class="empty">Lineup detail isn\'t available for this week.</td></tr>';
+    benchWrap.style.display = 'none';
+  } else {
+    starters.innerHTML = lineupRows(entry.s, true);
+    benchWrap.style.display = '';
+    document.getElementById('sheet-bench').innerHTML = lineupRows(entry.b, false);
+    const left = entry.b.reduce((a, r) => a + r[3], 0);
+    const note = document.getElementById('sheet-benchnote');
+    // The number that starts arguments in a guillotine league.
+    note.textContent = entry.b.length
+      ? `${fmt(left)} points left on the bench.`
+      : '';
+  }
+
+  lastFocus = document.activeElement;
+  sheet.classList.add('open');
+  document.getElementById('sheetclose').focus();
+}
+
+function closeSheet() {
+  sheet.classList.remove('open');
+  if (lastFocus && lastFocus.focus) lastFocus.focus();
+}
+
+document.getElementById('sheetclose').addEventListener('click', closeSheet);
+sheet.addEventListener('click', e => { if (e.target === sheet) closeSheet(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && sheet.classList.contains('open')) closeSheet();
+});
+
+board.addEventListener('click', e => {
+  const row = e.target.closest('.row');
+  if (row) openLineup(row.dataset.team, +row.dataset.week);
+});
+board.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const row = e.target.closest('.row');
+  if (row) { e.preventDefault(); openLineup(row.dataset.team, +row.dataset.week); }
+});
+svg.addEventListener('click', e => {
+  const dot = e.target.closest('.dot');
+  if (dot) openLineup(dot.dataset.team, +dot.dataset.week);
+});
 
 // ---- footer stamp, derived so it can't go stale ----
 {

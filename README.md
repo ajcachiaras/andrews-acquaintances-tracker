@@ -57,6 +57,14 @@ Team names in `data.js` are preserved verbatim across rebuilds; they're
 hand-curated and differ from Sleeper's own strings. `weeks`, `points`,
 `eliminated` and `generated` are regenerated.
 
+`lineups.js` is written alongside it, holding every team's starters and bench
+per week. It needs player *names*, which come from Sleeper's full player
+dictionary — about 14 MB, and their docs ask callers to pull it at most once a
+day. So it's cached in `.cache/` (gitignored, 24h) and only fetched when there's
+actually a new week to write. If that fetch fails the run still keeps the
+scores, which are the point; the page falls back to "lineup detail isn't
+available" and everything else works.
+
 To edit a week by hand anyway, change `data.js` — the page recomputes each
 week's cutoff, every team's margin above it, and the chart and board from it.
 
@@ -68,6 +76,10 @@ week's cutoff, every team's margin above it, and the chart and board from it.
   to gold (comfortably clear). Hover a line or point for detail.
 - **The board** — teams ranked low to high for whichever week you select,
   with each team's margin above that week's cutoff.
+- **Lineups** — click any team, on the board or on the chart, for that week's
+  starting lineup with each player's points, the bench behind it, and how many
+  points were left there. The best and worst starter are tinted. Close with the
+  ×, Escape, or a click outside.
 
 Current through week 2.
 
