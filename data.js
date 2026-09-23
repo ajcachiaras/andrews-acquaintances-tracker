@@ -4,7 +4,7 @@
 // for teams already out) and add the week number to WEEKS.
 
 const LEAGUE_DATA = {
-  generated: "2026-09-22",
+  generated: "2026-09-23",
   weeks: [1, 2],
   eliminated: {"10": 1, "17": 2},
   teams: {
