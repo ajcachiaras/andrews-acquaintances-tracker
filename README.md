@@ -11,16 +11,47 @@ at `https://ajcachiaras.github.io/andrews-acquaintances-tracker/`.
 
 ## Updating it each week
 
-All the data lives in `data.js`. To add a new week:
+This runs itself. A Windows scheduled task, **Guillotine Watch weekly update**,
+fires every Tuesday at 9:00 AM Pacific and runs `update.ps1`, which pulls the
+finished week from Sleeper, rewrites `data.js`, commits and pushes. Logs land in
+`logs/update-YYYY-MM-DD.log` (last 20 kept).
 
-1. Add the week number to the `weeks` array.
-2. Push that week's score onto every team still alive. A team that's already
-   been eliminated keeps getting `null` for later weeks — don't remove its
-   entry, just leave it out of the running.
+To run it by hand:
 
-The page recomputes each week's elimination cutoff (the lowest live score),
-every team's margin above it, and the chart and board below it automatically
-— no other file needs to change.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\update.ps1
+```
+
+Add `-DryRun` to see what a pull would change without touching anything, or
+`-NoPush` to commit locally only.
+
+### How the pull works
+
+`update_tracker.py` reads Sleeper's public API — no auth, no packages, standard
+library only — and **rebuilds every week from scratch on each run** rather than
+appending. That makes it idempotent: running it twice changes nothing the second
+time, and a missed Tuesday heals itself on the next run.
+
+Each week it takes the lowest score among teams still alive and records that
+team as cut. It can't read elimination off Sleeper directly: Sleeper clears a
+cut team's roster only after the fact, so a team eliminated Monday night still
+looks rostered on Tuesday morning. Cleared rosters are used to *confirm* earlier
+weeks, and any disagreement is logged as a warning.
+
+Two guards keep a bad run from destroying good data:
+
+- If the rebuild produces **fewer** weeks than `data.js` already holds — which
+  is what a not-yet-rolled-over Sleeper week counter looks like — it aborts and
+  leaves the file alone. Pass `--force` to override.
+- A week is only accepted once Sleeper has moved past it, so an in-progress
+  Sunday is never recorded as final.
+
+Team names in `data.js` are preserved verbatim across rebuilds; they're
+hand-curated and differ from Sleeper's own strings. `weeks`, `points`,
+`eliminated` and `generated` are regenerated.
+
+To edit a week by hand anyway, change `data.js` — the page recomputes each
+week's cutoff, every team's margin above it, and the chart and board from it.
 
 ## What's shown
 
@@ -31,5 +62,11 @@ every team's margin above it, and the chart and board below it automatically
 - **The board** — teams ranked low to high for whichever week you select,
   with each team's margin above that week's cutoff.
 
-Current through week 2. Team 10, Qadry Ismail's Womb, was the first team
-eliminated, after posting the week 1 low score of 60.21.
+Current through week 2.
+
+| Week | Eliminated | Low score |
+|---|---|---|
+| 1 | Qadry Ismail's Womb | 60.21 |
+| 2 | Max's team | 46.47 |
+
+<!-- This section and data.js are rewritten by update_tracker.py; edit that script, not these lines. -->

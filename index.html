@@ -91,7 +91,7 @@ footer p{max-width:74ch;margin:0 0 8px}
 
 <footer>
   <p>Scores are Sleeper's weekly totals under this league's scoring. A team's line stops the week it posts the season's lowest score among teams still alive — that's the guillotine. Margin is that team's cushion above the current week's cutoff.</p>
-  <p>Updated through week 2. To add a week, edit <code>data.js</code>.</p>
+  <p id="through"></p>
 </footer>
 
 </div>
@@ -112,9 +112,15 @@ teamIds.forEach(id => {
   points[id].forEach((v, wi) => { if (v !== null && v !== undefined) last = wi; });
   lastAliveWeek[id] = last;
 });
+// data.js states who was cut and when. It has to: a team still posts a score
+// the week it's eliminated, so that week alone can't be told apart from a
+// low-but-surviving week until the next week's nulls arrive. Falls back to the
+// old inference (their final scored week) if the map isn't there.
+const eliminatedWeek = LEAGUE_DATA.eliminated || {};
 const isEliminatedAt = (id, wi) => {
+  if (eliminatedWeek[id] != null) return eliminatedWeek[id] === weeks[wi];
   const last = lastAliveWeek[id];
-  return last < weeks.length - 1 && wi === last; // their final scored week
+  return last < weeks.length - 1 && wi === last;
 };
 
 function colorFor(margin, weekIdx) {
@@ -246,6 +252,15 @@ function renderBoard(wi) {
   }).join('');
 }
 renderBoard(weeks.length - 1);
+
+// ---- footer stamp, derived so it can't go stale ----
+{
+  const out = Object.keys(eliminatedWeek).length;
+  const stamp = LEAGUE_DATA.generated ? ` · data pulled ${LEAGUE_DATA.generated}` : '';
+  document.getElementById('through').innerHTML =
+    `Updated through week ${weeks[weeks.length - 1]} — ${19 - out} of 19 still alive${stamp}. ` +
+    `Refreshed from Sleeper by <code>update_tracker.py</code>.`;
+}
 </script>
 </body>
 </html>

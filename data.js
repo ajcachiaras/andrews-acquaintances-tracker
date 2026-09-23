@@ -2,8 +2,11 @@
 // Guillotine format: the lowest score each week is eliminated.
 // To add a week: push a score onto every still-alive team's array (or null
 // for teams already out) and add the week number to WEEKS.
+
 const LEAGUE_DATA = {
+  generated: "2026-09-22",
   weeks: [1, 2],
+  eliminated: {"10": 1, "17": 2},
   teams: {
     "1":  "Culpepper's Love Boat",
     "2":  "Jaxson Dart's ReachAround",
