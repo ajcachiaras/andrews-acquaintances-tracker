@@ -12,9 +12,16 @@ at `https://ajcachiaras.github.io/andrews-acquaintances-tracker/`.
 ## Updating it each week
 
 This runs itself. A Windows scheduled task, **Guillotine Watch weekly update**,
-fires every Tuesday at 9:00 AM Pacific and runs `update.ps1`, which pulls the
-finished week from Sleeper, rewrites `data.js`, commits and pushes. Logs land in
-`logs/update-YYYY-MM-DD.log` (last 20 kept).
+runs `update.ps1`, which pulls the finished week from Sleeper, rewrites
+`data.js`, commits and pushes. Logs land in `logs/update-YYYY-MM-DD.log` (last
+20 kept).
+
+It fires **Tuesday at 9:00 AM Pacific**, the morning after Monday Night
+Football, and again **Wednesday at 9:00 AM** as a backstop. The second run is a
+no-op whenever the first one worked. It exists because the script won't record a
+week until Sleeper's own week counter has rolled past it; if that rollover ever
+lands after 9 AM Tuesday, Tuesday's run aborts without touching the data and
+Wednesday's picks it up, instead of the site sitting stale for a week.
 
 To run it by hand:
 
