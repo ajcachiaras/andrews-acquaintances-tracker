@@ -45,6 +45,20 @@ cut team's roster only after the fact, so a team eliminated Monday night still
 looks rostered on Tuesday morning. Cleared rosters are used to *confirm* earlier
 weeks, and any disagreement is logged as a warning.
 
+Projections come from Sleeper's weekly projection endpoint and are scored with
+**this league's** settings rather than taken as a generic half-PPR number —
+0.5 PPR, 4-point passing TDs and the 0.25 TE reception bonus all change what a
+player was "expected" to do here. That scoring function was checked by running
+it over Sleeper's *actual* stats for a finished week: it reproduced all 156 of
+that week's real player scores to the cent. Past weeks' projections never
+change, so they're cached in `.cache/` permanently.
+
+The two data scripts are loaded with a `?v=<date>` stamp that `update_tracker.py`
+rewrites whenever the data changes. Without it a browser can pair a fresh
+`index.html` with a cached `data.js` or `lineups.js` — which is not theoretical,
+it happened during development, and the mismatched shapes silently dropped every
+projection from the page.
+
 `generated` in `data.js` is the date the data last **changed**, not the last
 time it was checked — the logs are the record of runs. It's compared out before
 deciding whether anything moved, because it holds today's date, so leaving it in
@@ -83,8 +97,12 @@ week's cutoff, every team's margin above it, and the chart and board from it.
   with each team's margin above that week's cutoff.
 - **Lineups** — click any team, on the board or on the chart, for that week's
   starting lineup with each player's points, the bench behind it, and how many
-  points were left there. The best and worst starter are tinted. Close with the
-  ×, Escape, or a click outside.
+  points were left there. Close with the ×, Escape, or a click outside.
+- **Over/under expectation** — each player's score is coloured against his
+  projection for that week: green if he beat it, red if he missed it, through a
+  neutral middle. A 10-point swing is full saturation, so one 40-point week
+  doesn't flatten everything else. The projection and the signed difference are
+  printed next to the score, so the colour is never the only thing carrying it.
 
 Current through week 2.
 

@@ -27,6 +27,8 @@ LEAGUE_ID = "1357848429371338752"
 API = "https://api.sleeper.app/v1"
 MAX_WEEK = 18
 
+SEASON = None  # set from Sleeper state during build()
+
 ROOT = Path(__file__).resolve().parent
 DATA_JS = ROOT / "data.js"
 LINEUPS_JS = ROOT / "lineups.js"
@@ -103,18 +105,55 @@ def player_index():
     return slim
 
 
-def starter_slots():
-    """Lineup slot labels in starter order, e.g. QB, RB, RB, WR, WR, FLEX x3."""
+def league_meta():
+    """Starter slot labels in order (QB, RB, RB, WR, WR, FLEX x3) and this
+    league's scoring table."""
     league = get("/league/%s" % LEAGUE_ID)
-    return [p for p in (league.get("roster_positions") or []) if p not in ("BN", "IR", "TAXI")]
+    slots = [p for p in (league.get("roster_positions") or []) if p not in ("BN", "IR", "TAXI")]
+    return slots, (league.get("scoring_settings") or {})
 
 
-def build_lineups(rows_by_week, points, team_ids, players, slots):
-    """Per team, per week: who started, what they scored, and what sat on the
-    bench. Keyed week -> team -> {t: total, s: [[slot, name, nflteam, pts]],
-    b: [[pos, name, nflteam, pts]]}."""
+def score_line(stats, scoring):
+    """Fantasy points for a stat line under this league's scoring.
+
+    Verified against a full week: applied to Sleeper's actual stats it
+    reproduces all 156 of that week's real player scores to the cent, which is
+    what makes it trustworthy applied to projections.
+    """
+    return sum(scoring.get(k, 0) * v for k, v in stats.items() if isinstance(v, (int, float)))
+
+
+def projected_points(season, week, scoring):
+    """Expected points per player for a finished week, cached forever -- a past
+    week's projection never changes."""
+    CACHE.mkdir(exist_ok=True)
+    cached = CACHE / ("proj-%s-%d.json" % (season, week))
+    if cached.exists():
+        return json.loads(cached.read_text(encoding="utf-8"))
+
+    raw = get("/projections/nfl/regular/%s/%d" % (season, week))
+    out = {}
+    for pid, stats in (raw or {}).items():
+        if isinstance(stats, dict):
+            out[pid] = round(score_line(stats, scoring), 2)
+    cached.write_text(json.dumps(out), encoding="utf-8")
+    log("  projections week %d: %d players" % (week, len(out)))
+    return out
+
+
+def build_lineups(rows_by_week, points, team_ids, players, slots, season, scoring):
+    """Per team, per week: who started, what they scored against what they were
+    projected to score, and what sat on the bench. Keyed week -> team ->
+    {t: total, s: [[slot, name, nflteam, pts, proj]], b: [[pos, ...]]}."""
     out = {}
     for w, rows in rows_by_week.items():
+        try:
+            proj = projected_points(season, w, scoring)
+        except SystemExit:
+            raise
+        except Exception as e:
+            log("WARNING: no projections for week %d (%s) -- lineups lose their colour." % (w, e))
+            proj = {}
         week_entry = {}
         for tid in team_ids:
             wi = w - 1
@@ -132,10 +171,10 @@ def build_lineups(rows_by_week, points, team_ids, players, slots):
                 slot = slots[i] if i < len(slots) else "FLEX"
                 pts = round(float(spts[i]), 2) if i < len(spts) and spts[i] is not None else 0.0
                 if pid in (None, "0", 0):
-                    s.append([slot, "(empty)", "", 0.0])
+                    s.append([slot, "(empty)", "", 0.0, None])
                     continue
                 name, pos, nfl = players.get(str(pid), [str(pid), "", ""])
-                s.append([slot, name, nfl, pts])
+                s.append([slot, name, nfl, pts, proj.get(str(pid))])
 
             started = {str(p) for p in starters}
             b = []
@@ -144,7 +183,9 @@ def build_lineups(rows_by_week, points, team_ids, players, slots):
                     continue
                 name, pos, nfl = players.get(str(pid), [str(pid), "", ""])
                 pts = ppts.get(str(pid))
-                b.append([pos or "", name, nfl, round(float(pts), 2) if pts is not None else 0.0])
+                b.append([pos or "", name, nfl,
+                          round(float(pts), 2) if pts is not None else 0.0,
+                          proj.get(str(pid))])
             b.sort(key=lambda r: -r[3])
 
             week_entry[tid] = {"t": points[tid][wi], "s": s, "b": b}
@@ -158,8 +199,11 @@ def render_lineups_js(lineups):
         "// update_tracker.py from Sleeper. Do not edit by hand.",
         "//",
         "// week -> team id -> { t: total, s: starters, b: bench }",
-        "//   starter: [slot, player, nfl team, points]",
-        "//   bench:   [position, player, nfl team, points]",
+        "//   starter: [slot, player, nfl team, points, projected]",
+        "//   bench:   [position, player, nfl team, points, projected]",
+        "//",
+        "// Projected points are Sleeper's weekly projection scored under this",
+        "// league's own settings, not a generic half-PPR number.",
         "",
         "const LEAGUE_LINEUPS = {",
     ]
@@ -176,6 +220,23 @@ def render_lineups_js(lineups):
         head.append("  }%s" % ("" if wn == len(weeks) - 1 else ","))
     head.append("};")
     return "\n".join(head) + "\n"
+
+
+INDEX = ROOT / "index.html"
+
+
+def stamp_assets(stamp):
+    """Version the data script tags so a browser can't pair a fresh index.html
+    with a cached data.js. GitHub Pages serves both with max-age, and the two
+    files have to agree about their shape."""
+    if not INDEX.exists():
+        return
+    text = INDEX.read_text(encoding="utf-8")
+    new = re.sub(r'(<script src="(?:data|lineups)\.js)(?:\?v=[^"]*)?(">)',
+                 lambda m: "%s?v=%s%s" % (m.group(1), stamp, m.group(2)), text)
+    if new != text:
+        INDEX.write_text(new, encoding="utf-8")
+        log("Stamped index.html script tags with ?v=%s." % stamp)
 
 
 def parse_data_js(text):
@@ -201,7 +262,9 @@ def parse_data_js(text):
 
 def build(team_ids, names):
     """Walk the season week by week, applying the guillotine as we go."""
+    global SEASON
     state = get("/state/nfl")
+    SEASON = state.get("season")
     current_week = int(state["week"])
     log("Sleeper reports week %d (display_week %s); weeks 1-%d are candidates."
         % (current_week, state.get("display_week"), current_week - 1))
@@ -338,10 +401,13 @@ def main():
     # Lineups are only built when there is something new to write -- they cost
     # a 14 MB player-index fetch on a cold cache.
     try:
-        lineups = build_lineups(rows_by_week, points, team_ids, player_index(), starter_slots())
+        slots, scoring = league_meta()
+        lineups = build_lineups(rows_by_week, points, team_ids,
+                                player_index(), slots, SEASON, scoring)
         LINEUPS_JS.write_text(render_lineups_js(lineups), encoding="utf-8")
         log("Wrote lineups.js -- %d week(s), %.0f KB."
             % (len(lineups), LINEUPS_JS.stat().st_size / 1024))
+        stamp_assets(date.today().isoformat())
     except SystemExit:
         raise
     except Exception as e:

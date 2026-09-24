@@ -93,8 +93,17 @@ footer p{max-width:74ch;margin:0 0 8px}
 .lineup .who small{color:var(--muted);font-weight:400;margin-left:6px;font-size:.8rem}
 .lineup .pts{text-align:right;font-family:Oswald,sans-serif;font-size:1.05rem;width:64px}
 .lineup .empty{color:var(--gone);font-style:italic}
-.lineup .best .pts{color:var(--safe)}
-.lineup .worst .pts{color:var(--danger)}
+.lineup th{padding:0 0 6px;text-align:left;font-family:Oswald,sans-serif;font-weight:500;
+  font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--gone);
+  border-bottom:1px solid #2A3830}
+.lineup th.proj,.lineup th.pts{text-align:right}
+.lineup .proj{text-align:right;font-family:Oswald,sans-serif;font-size:.95rem;color:var(--muted);width:52px}
+.lineup .pts small{display:block;font-family:"Work Sans",sans-serif;font-size:.7rem;
+  font-weight:500;opacity:.85;margin-top:1px}
+.oulegend{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  color:var(--muted);font-size:.78rem;margin:10px 0 0}
+.oulegend .ousw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-left:8px}
+.oulegend .ousw:first-child{margin-left:0}
 .benchnote{color:var(--muted);font-size:.85rem;margin:10px 0 0}
 
 /* On a phone the page and card padding was eating a quarter of the width the
@@ -152,18 +161,28 @@ footer p{max-width:74ch;margin:0 0 8px}
       <div class="sheettotal"><b id="sheet-total"></b> points <span id="sheet-status"></span></div>
     </div>
     <h3>Starters</h3>
-    <table class="lineup"><tbody id="sheet-starters"></tbody></table>
+    <table class="lineup">
+      <thead><tr><th class="slot"></th><th>Player</th><th class="proj">Proj</th><th class="pts">Pts</th></tr></thead>
+      <tbody id="sheet-starters"></tbody>
+    </table>
+    <p class="oulegend">
+      <span class="ousw" style="background:rgb(210,88,75)"></span>missed projection
+      <span class="ousw" style="background:rgb(116,194,122)"></span>beat it
+    </p>
     <div id="sheet-benchwrap">
       <h3>Bench</h3>
-      <table class="lineup"><tbody id="sheet-bench"></tbody></table>
+      <table class="lineup">
+        <thead><tr><th class="slot"></th><th>Player</th><th class="proj">Proj</th><th class="pts">Pts</th></tr></thead>
+        <tbody id="sheet-bench"></tbody>
+      </table>
       <p class="benchnote" id="sheet-benchnote"></p>
     </div>
   </div>
 </div>
 
 <div id="tooltip"></div>
-<script src="data.js"></script>
-<script src="lineups.js"></script>
+<script src="data.js?v=2026-09-24"></script>
+<script src="lineups.js?v=2026-09-24"></script>
 <script>
 const { weeks, teams, points } = LEAGUE_DATA;
 const teamIds = Object.keys(teams);
@@ -375,20 +394,30 @@ let lastFocus = null;
 
 const fmt = n => n.toFixed(2);
 
-function lineupRows(list, bestWorst) {
-  if (!list.length) return '<tr><td class="empty">Nobody.</td></tr>';
-  const scores = list.map(r => r[3]);
-  const hi = Math.max(...scores), lo = Math.min(...scores);
-  return list.map(([slot, name, nfl, pts]) => {
+// Red when a player missed his projection, green when he beat it, through a
+// neutral middle. A 10-point miss or beat is full saturation -- past that the
+// colour stops changing, so one 40-point week doesn't flatten everything else.
+const OU_UNDER = [210, 88, 75], OU_MID = [159, 171, 156], OU_OVER = [116, 194, 122];
+function ouColor(pts, proj) {
+  if (proj == null) return null;
+  const t = Math.max(-1, Math.min(1, (pts - proj) / 10));
+  const [a, b, f] = t < 0 ? [OU_UNDER, OU_MID, t + 1] : [OU_MID, OU_OVER, t];
+  const mix = a.map((c, i) => Math.round(c + (b[i] - c) * f));
+  return `rgb(${mix[0]},${mix[1]},${mix[2]})`;
+}
+
+function lineupRows(list) {
+  if (!list.length) return '<tr><td class="empty" colspan="4">Nobody.</td></tr>';
+  return list.map(([slot, name, nfl, pts, proj]) => {
     const empty = name === '(empty)';
-    let cls = '';
-    if (bestWorst && !empty && list.length > 1) {
-      if (pts === hi) cls = 'best'; else if (pts === lo) cls = 'worst';
-    }
-    return `<tr class="${cls}">
+    const col = empty ? null : ouColor(pts, proj);
+    const d = (empty || proj == null) ? null : pts - proj;
+    return `<tr>
       <td class="slot">${slot}</td>
       <td class="who ${empty ? 'empty' : ''}">${name}${nfl && !empty ? `<small>${nfl}</small>` : ''}</td>
-      <td class="pts">${empty ? '—' : fmt(pts)}</td>
+      <td class="proj">${(empty || proj == null) ? '—' : fmt(proj)}</td>
+      <td class="pts"${col ? ` style="color:${col}"` : ''}>${empty ? '—' : fmt(pts)}${
+        d == null ? '' : `<small>${d >= 0 ? '+' : '−'}${fmt(Math.abs(d))}</small>`}</td>
     </tr>`;
   }).join('');
 }
@@ -421,9 +450,9 @@ function openLineup(id, wi) {
     starters.innerHTML = '<tr><td class="empty">Lineup detail isn\'t available for this week.</td></tr>';
     benchWrap.style.display = 'none';
   } else {
-    starters.innerHTML = lineupRows(entry.s, true);
+    starters.innerHTML = lineupRows(entry.s);
     benchWrap.style.display = '';
-    document.getElementById('sheet-bench').innerHTML = lineupRows(entry.b, false);
+    document.getElementById('sheet-bench').innerHTML = lineupRows(entry.b);
     const left = entry.b.reduce((a, r) => a + r[3], 0);
     const note = document.getElementById('sheet-benchnote');
     // The number that starts arguments in a guillotine league.
