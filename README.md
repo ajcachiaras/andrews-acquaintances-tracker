@@ -93,6 +93,13 @@ week's cutoff, every team's margin above it, and the chart and board from it.
   tracing the elimination cutoff week to week. Each point is colored by how
   far that score sat above the cutoff that week, from crimson (right at it)
   to gold (comfortably clear). Hover a line or point for detail.
+- **The team picker** — a row of chips above the chart. Tap one and that team's
+  line is emphasised while the rest recede (they fade rather than vanish, since
+  the point is reading one line against the pack). Tap it again or hit **All
+  teams** to clear. This is what hovering does on a desktop; the chips are how
+  you do it with a thumb. Eliminated teams are struck through. Hovering still
+  works and temporarily overrides the pick, falling back to it rather than
+  clearing it.
 - **The board** — teams ranked low to high for whichever week you select,
   with each team's margin above that week's cutoff.
 - **Lineups** — click any team, on the board or on the chart, for that week's

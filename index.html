@@ -37,6 +37,22 @@ svg{width:100%;height:auto;display:block;overflow:visible}
 .taglabel.hot{fill:var(--ink);font-weight:600}
 .leader{stroke:var(--line);stroke-width:1}
 .leader.hot{stroke:var(--muted)}
+.dot.hot{stroke:var(--ink);stroke-width:1.6}
+/* When one team is picked, everything else recedes rather than disappearing --
+   the point is to read one line against the pack, not on its own. */
+svg.focused .teamline:not(.hot){opacity:.14}
+svg.focused .taglabel:not(.hot){opacity:.3}
+svg.focused .leader:not(.hot){opacity:.3}
+svg.focused .dot:not(.hot){opacity:.3}
+
+.teamsel{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.teamsel button{font:inherit;font-family:"Work Sans",sans-serif;font-size:.82rem;line-height:1.2;
+  background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:6px 12px;cursor:pointer;white-space:nowrap}
+.teamsel button:hover{color:var(--ink);border-color:var(--muted)}
+.teamsel button[aria-pressed="true"]{background:var(--ink);color:#12190F;border-color:var(--ink);font-weight:600}
+.teamsel button.out{opacity:.45;text-decoration:line-through}
+.teamsel button.out[aria-pressed="true"]{opacity:1;text-decoration:none}
 
 #tooltip{position:fixed;pointer-events:none;background:#0E1712;border:1px solid var(--line);border-radius:8px;
   padding:10px 12px;font-size:.88rem;color:var(--ink);opacity:0;transition:opacity .1s;z-index:5;max-width:220px}
@@ -127,6 +143,7 @@ footer p{max-width:74ch;margin:0 0 8px}
 
 <section aria-labelledby="ct">
   <h2 id="ct">Points by week</h2>
+  <div class="teamsel" id="teamsel" role="group" aria-label="Emphasise one team's line"></div>
   <div class="chartcard">
     <svg id="chart" viewBox="0 0 1040 460" role="img" aria-label="Line chart of each team's weekly fantasy points, with a dashed line marking each week's elimination cutoff"></svg>
     <div class="legend">
@@ -238,6 +255,11 @@ function niceScale(lo, hi) {
 // full name where there isn't room for it.
 const shortName = id => teams[id].split(' ')[0];
 
+// A picked team stays emphasised; hovering is a temporary override that falls
+// back to it. Declared up here because drawChart() reapplies it after a
+// re-render and runs before the interactivity section below.
+let selectedTeam = null;
+
 function drawChart() {
   const narrow = (svg.parentElement.clientWidth || 900) < 620;
   // A narrower viewBox on a phone means the same font size renders bigger
@@ -316,6 +338,7 @@ function drawChart() {
   });
 
   svg.innerHTML = svgHTML;
+  setHot(selectedTeam);   // a re-render drops the classes; put the pick back
 }
 
 drawChart();
@@ -325,16 +348,50 @@ addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setT
 // ---- interactivity: hover highlights a team's line + labels, shows tooltip ----
 const tooltip = document.getElementById('tooltip');
 function setHot(id) {
-  svg.querySelectorAll('.teamline').forEach(p => p.classList.toggle('hot', p.dataset.team === id));
-  svg.querySelectorAll('.taglabel').forEach(t => t.classList.toggle('hot', t.dataset.team === id));
-  svg.querySelectorAll('.leader').forEach(l => l.classList.toggle('hot', l.dataset.team === id));
+  svg.querySelectorAll('[data-team]').forEach(el => el.classList.toggle('hot', el.dataset.team === id));
+  svg.classList.toggle('focused', !!id);
 }
 svg.addEventListener('pointerover', e => {
   const el = e.target.closest('[data-team]');
   if (!el) return;
   setHot(el.dataset.team);
 });
-svg.addEventListener('pointerleave', () => { setHot(null); tooltip.style.opacity = 0; });
+// Falling back to the pick rather than to nothing, so a stray hover doesn't
+// clear a team the reader chose.
+svg.addEventListener('pointerleave', () => { setHot(selectedTeam); tooltip.style.opacity = 0; });
+
+// ---- team picker: what hover does on a desktop, for a thumb ----
+const teamSel = document.getElementById('teamsel');
+function selectTeam(id) {
+  selectedTeam = id;
+  setHot(id);
+  [...teamSel.children].forEach(b => b.setAttribute('aria-pressed', (b.dataset.team || null) === id));
+}
+{
+  const all = document.createElement('button');
+  all.type = 'button';
+  all.textContent = 'All teams';
+  all.setAttribute('aria-pressed', 'true');
+  all.addEventListener('click', () => selectTeam(null));
+  teamSel.appendChild(all);
+
+  teamIds.forEach(id => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.team = id;
+    b.textContent = shortName(id);
+    b.title = teams[id];
+    b.setAttribute('aria-pressed', 'false');
+    if (eliminatedWeek[id] != null) {
+      b.classList.add('out');
+      b.title += ` — out in week ${eliminatedWeek[id]}`;
+    }
+    // Tapping the chosen team again clears it, so there's a way back without
+    // hunting for "All teams".
+    b.addEventListener('click', () => selectTeam(selectedTeam === id ? null : id));
+    teamSel.appendChild(b);
+  });
+}
 svg.addEventListener('pointermove', e => {
   const dot = e.target.closest('.dot');
   if (!dot) { tooltip.style.opacity = 0; return; }
