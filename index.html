@@ -32,8 +32,11 @@ svg{width:100%;height:auto;display:block;overflow:visible}
 .cutline{fill:none;stroke:var(--danger);stroke-width:1.6;stroke-dasharray:5 5;opacity:.85}
 .dot{cursor:pointer}
 .eliminated-mark{stroke:var(--gone);stroke-width:2.5}
-.taglabel{font-size:12px;fill:var(--muted);font-family:"Work Sans",sans-serif}
+.taglabel{font-size:var(--tag,12px);fill:var(--muted);font-family:"Work Sans",sans-serif;
+  dominant-baseline:central}
 .taglabel.hot{fill:var(--ink);font-weight:600}
+.leader{stroke:var(--line);stroke-width:1}
+.leader.hot{stroke:var(--muted)}
 
 #tooltip{position:fixed;pointer-events:none;background:#0E1712;border:1px solid var(--line);border-radius:8px;
   padding:10px 12px;font-size:.88rem;color:var(--ink);opacity:0;transition:opacity .1s;z-index:5;max-width:220px}
@@ -93,6 +96,15 @@ footer p{max-width:74ch;margin:0 0 8px}
 .lineup .best .pts{color:var(--safe)}
 .lineup .worst .pts{color:var(--danger)}
 .benchnote{color:var(--muted);font-size:.85rem;margin:10px 0 0}
+
+/* On a phone the page and card padding was eating a quarter of the width the
+   chart had to draw in, which is what made the labels so small. */
+@media (max-width:620px){
+  .wrap{padding:28px 14px 60px}
+  .chartcard{padding:18px 8px 6px}
+  .row{grid-template-columns:26px 1fr 72px 84px;gap:8px;padding:10px}
+  .sheetbox{padding:20px 16px 16px}
+}
 </style>
 </head>
 <body>
@@ -191,65 +203,112 @@ function colorFor(margin, weekIdx) {
 
 // ---- chart geometry ----
 const svg = document.getElementById('chart');
-const W = 1040, H = 460, padL = 46, padR = 24, padT = 20, padB = 40;
-const plotW = W - padL - padR, plotH = H - padT - padB;
 const allScores = teamIds.flatMap(id => points[id].filter(v => v != null));
-const yMin = 0, yMax = Math.ceil(Math.max(...allScores) / 10) * 10 + 10;
-const x = wi => padL + (weeks.length === 1 ? plotW/2 : (plotW * wi) / (weeks.length - 1));
-const y = v => padT + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
 
-let svgHTML = '';
-// gridlines + y labels
-const ySteps = 6;
-for (let i = 0; i <= ySteps; i++) {
-  const val = yMin + ((yMax - yMin) * i) / ySteps;
-  const yy = y(val);
-  svgHTML += `<line class="gridline" x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}"/>`;
-  svgHTML += `<text class="axislabel" x="${padL-10}" y="${yy+4}" text-anchor="end">${Math.round(val)}</text>`;
+// The y axis is framed on the scores, not on zero. Nobody has scored under 40,
+// so starting there gives the lines roughly half again as much room to
+// separate -- which is the whole point of the chart.
+function niceScale(lo, hi) {
+  const pad = Math.max(2, (hi - lo) * 0.06);
+  lo -= pad; hi += pad;
+  const step = [5, 10, 20, 25, 50, 100].find(s => (hi - lo) / s <= 7) || 200;
+  return { min: Math.floor(lo / step) * step, max: Math.ceil(hi / step) * step, step };
 }
-weeks.forEach((wnum, wi) => {
-  svgHTML += `<text class="axislabel" x="${x(wi)}" y="${H-14}" text-anchor="middle">Week ${wnum}</text>`;
-});
 
-// cutoff line
-const cutPath = cutoff.map((c, wi) => `${wi===0?'M':'L'}${x(wi)},${y(c)}`).join(' ');
-svgHTML += `<path class="cutline" d="${cutPath}"/>`;
+// Every team's first word is unique in this league, so it stands in for the
+// full name where there isn't room for it.
+const shortName = id => teams[id].split(' ')[0];
 
-// team lines
-teamIds.forEach(id => {
-  const pts = points[id];
-  let d = '';
-  pts.forEach((v, wi) => {
-    if (v == null) return;
-    d += (d === '' ? 'M' : 'L') + `${x(wi)},${y(v)} `;
-  });
-  svgHTML += `<path class="teamline" data-team="${id}" d="${d.trim()}"/>`;
-});
+function drawChart() {
+  const narrow = (svg.parentElement.clientWidth || 900) < 620;
+  // A narrower viewBox on a phone means the same font size renders bigger
+  // relative to the plot; a taller one gives the labels room to sit apart.
+  const W = narrow ? 350 : 1040;
+  const H = narrow ? 540 : 520;
+  const padL = narrow ? 30 : 46;
+  const padR = narrow ? 96 : 182;   // room for the end labels, which used to
+  const padT = narrow ? 16 : 20;    // overflow the viewBox and collide
+  const padB = narrow ? 34 : 40;
+  const font = narrow ? 13 : 12;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
 
-// dots (drawn after lines so they sit on top) + end labels
-teamIds.forEach(id => {
-  const pts = points[id];
-  pts.forEach((v, wi) => {
-    if (v == null) return;
-    const margin = v - cutoff[wi];
-    const col = colorFor(margin, wi);
-    const eliminated = isEliminatedAt(id, wi);
-    const r = eliminated ? 6 : 4;
-    svgHTML += `<circle class="dot" data-team="${id}" data-week="${wi}" cx="${x(wi)}" cy="${y(v)}" r="${r}" fill="${eliminated ? 'var(--gone)' : col}" stroke="${eliminated ? 'var(--ink)' : 'none'}" stroke-width="${eliminated?1.5:0}"/>`;
-  });
-  const last = lastAliveWeek[id];
-  if (last === weeks.length - 1) {
-    svgHTML += `<text class="taglabel" data-team="${id}" x="${x(last)+8}" y="${y(pts[last])+4}">${teams[id].split(' ').slice(0,2).join(' ')}</text>`;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.style.setProperty('--tag', font + 'px');
+
+  const sc = niceScale(Math.min(...allScores), Math.max(...allScores));
+  const x = wi => padL + (weeks.length === 1 ? plotW / 2 : (plotW * wi) / (weeks.length - 1));
+  const y = v => padT + plotH - ((v - sc.min) / (sc.max - sc.min)) * plotH;
+
+  let svgHTML = '';
+  for (let val = sc.min; val <= sc.max + 0.001; val += sc.step) {
+    const yy = y(val);
+    svgHTML += `<line class="gridline" x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}"/>`;
+    svgHTML += `<text class="axislabel" x="${padL - 8}" y="${yy + 4}" text-anchor="end">${Math.round(val)}</text>`;
   }
-});
+  weeks.forEach((wnum, wi) => {
+    svgHTML += `<text class="axislabel" x="${x(wi)}" y="${H - 14}" text-anchor="middle">${narrow ? 'Wk ' : 'Week '}${wnum}</text>`;
+  });
 
-svg.innerHTML = svgHTML;
+  const cutPath = cutoff.map((c, wi) => `${wi === 0 ? 'M' : 'L'}${x(wi)},${y(c)}`).join(' ');
+  svgHTML += `<path class="cutline" d="${cutPath}"/>`;
+
+  teamIds.forEach(id => {
+    let d = '';
+    points[id].forEach((v, wi) => {
+      if (v == null) return;
+      d += (d === '' ? 'M' : 'L') + `${x(wi)},${y(v)} `;
+    });
+    if (d) svgHTML += `<path class="teamline" data-team="${id}" d="${d.trim()}"/>`;
+  });
+
+  teamIds.forEach(id => {
+    points[id].forEach((v, wi) => {
+      if (v == null) return;
+      const eliminated = isEliminatedAt(id, wi);
+      const r = eliminated ? (narrow ? 6.5 : 6) : (narrow ? 5 : 4);
+      svgHTML += `<circle class="dot" data-team="${id}" data-week="${wi}" cx="${x(wi)}" cy="${y(v)}" r="${r}" fill="${eliminated ? 'var(--gone)' : colorFor(v - cutoff[wi], wi)}" stroke="${eliminated ? 'var(--ink)' : 'none'}" stroke-width="${eliminated ? 1.5 : 0}"/>`;
+    });
+  });
+
+  // End labels, nudged apart so no two overlap. Without this the teams bunched
+  // around the median print on top of each other and none of them is readable.
+  const lastWi = weeks.length - 1;
+  const tags = teamIds
+    .filter(id => points[id][lastWi] != null)
+    .map(id => ({ id, at: y(points[id][lastWi]), y: y(points[id][lastWi]) }))
+    .sort((a, b) => a.y - b.y);
+  const gap = font * 1.12;
+  for (let i = 1; i < tags.length; i++) {
+    if (tags[i].y - tags[i - 1].y < gap) tags[i].y = tags[i - 1].y + gap;
+  }
+  const floorY = padT + plotH;
+  if (tags.length && tags[tags.length - 1].y > floorY) {
+    tags[tags.length - 1].y = floorY;
+    for (let i = tags.length - 2; i >= 0; i--) {
+      if (tags[i + 1].y - tags[i].y < gap) tags[i].y = tags[i + 1].y - gap;
+    }
+  }
+  tags.forEach(t => {
+    // A leader line, since a nudged label no longer sits at its own point.
+    if (Math.abs(t.y - t.at) > 1.5) {
+      svgHTML += `<line class="leader" data-team="${t.id}" x1="${x(lastWi) + 5}" y1="${t.at}" x2="${x(lastWi) + 11}" y2="${t.y - 4}"/>`;
+    }
+    svgHTML += `<text class="taglabel" data-team="${t.id}" x="${x(lastWi) + 13}" y="${t.y}">${narrow ? shortName(t.id) : teams[t.id].split(' ').slice(0, 2).join(' ')}</text>`;
+  });
+
+  svg.innerHTML = svgHTML;
+}
+
+drawChart();
+let resizeTimer;
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(drawChart, 150); });
 
 // ---- interactivity: hover highlights a team's line + labels, shows tooltip ----
 const tooltip = document.getElementById('tooltip');
 function setHot(id) {
   svg.querySelectorAll('.teamline').forEach(p => p.classList.toggle('hot', p.dataset.team === id));
   svg.querySelectorAll('.taglabel').forEach(t => t.classList.toggle('hot', t.dataset.team === id));
+  svg.querySelectorAll('.leader').forEach(l => l.classList.toggle('hot', l.dataset.team === id));
 }
 svg.addEventListener('pointerover', e => {
   const el = e.target.closest('[data-team]');
