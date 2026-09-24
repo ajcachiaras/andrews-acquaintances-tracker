@@ -45,6 +45,11 @@ cut team's roster only after the fact, so a team eliminated Monday night still
 looks rostered on Tuesday morning. Cleared rosters are used to *confirm* earlier
 weeks, and any disagreement is logged as a warning.
 
+`generated` in `data.js` is the date the data last **changed**, not the last
+time it was checked — the logs are the record of runs. It's compared out before
+deciding whether anything moved, because it holds today's date, so leaving it in
+meant every run on a new day looked like a change and committed one.
+
 Two guards keep a bad run from destroying good data:
 
 - If the rebuild produces **fewer** weeks than `data.js` already holds — which

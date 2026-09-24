@@ -465,7 +465,9 @@ svg.addEventListener('click', e => {
 // ---- footer stamp, derived so it can't go stale ----
 {
   const out = Object.keys(eliminatedWeek).length;
-  const stamp = LEAGUE_DATA.generated ? ` · data pulled ${LEAGUE_DATA.generated}` : '';
+  // The stamp is when the data last *changed*, not when it was last checked --
+  // a run that finds nothing new leaves it alone rather than committing a date.
+  const stamp = LEAGUE_DATA.generated ? ` · data last changed ${LEAGUE_DATA.generated}` : '';
   document.getElementById('through').innerHTML =
     `Updated through week ${weeks[weeks.length - 1]} — ${19 - out} of 19 still alive${stamp}. ` +
     `Refreshed from Sleeper by <code>update_tracker.py</code>.`;

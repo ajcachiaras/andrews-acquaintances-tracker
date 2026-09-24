@@ -315,7 +315,14 @@ def main():
             "pass --force if this is intended." % (len(weeks), len(existing_weeks)))
 
     new_data = render_data_js(header, teams_body, team_ids, weeks, points, eliminations)
-    if new_data == text and LINEUPS_JS.exists():
+
+    # Compare without the date stamp. It is today's date, so leaving it in the
+    # comparison means a run on any new day always "differs" and commits --
+    # which buried the first real week under a date-only commit.
+    def without_stamp(s):
+        return re.sub(r'^  generated: "[^"]*",\n', "", s, flags=re.M)
+
+    if without_stamp(new_data) == without_stamp(text) and LINEUPS_JS.exists():
         log("No change -- already current through week %d." % weeks[-1])
         return 0
 
