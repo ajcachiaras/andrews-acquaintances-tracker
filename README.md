@@ -119,6 +119,6 @@ Current through week 5.
 | 2 | Max's team | 46.47 |
 | 3 | lane's johnson's fluffer | 60.16 |
 | 4 | ChrisSnee's Father-in-law | 72.06 |
-| 5 | Jaxson Dart's ReachAround | 64.95 |
+| 5 | Naber's Brown Goat | 50.97 |
 
 <!-- This section and data.js are rewritten by update_tracker.py; edit that script, not these lines. -->
