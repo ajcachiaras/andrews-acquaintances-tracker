@@ -35,15 +35,30 @@ Add `-DryRun` to see what a pull would change without touching anything, or
 ### How the pull works
 
 `update_tracker.py` reads Sleeper's public API — no auth, no packages, standard
-library only — and **rebuilds every week from scratch on each run** rather than
-appending. That makes it idempotent: running it twice changes nothing the second
-time, and a missed Tuesday heals itself on the next run.
+library only — and is **append-only**. A week is recorded once, the first run
+after it finishes, and then frozen. Later runs add new weeks and never rewrite
+old ones.
+
+That is deliberate, and it was learned the hard way. **A finished week is not
+immutable upstream.** This league adds a starting slot every week or two as
+teams are eliminated — 8 starters in weeks 1–2, 9 in weeks 3–5, 10 from week 6 —
+and when the roster settings change, Sleeper reshapes *past* weeks'
+`starters` arrays to the new layout and recomputes those weeks' points from
+them. Real starters get pushed onto the bench and their points vanish from the
+total.
+
+It happened twice before it was caught. Week 3 quietly lost points for six teams
+on 6 October. Week 5 lost points for all fifteen on 14 October — one team dropped
+19.65 because its starting TE was reclassified as a bench player — and that
+**changed which team the guillotine took**, from Jaxson Dart's ReachAround to
+Naber's Brown Goat. The original rebuild-from-scratch design overwrote the
+correct history with the corrupted version, on both occasions, automatically.
 
 Each week it takes the lowest score among teams still alive and records that
-team as cut. It can't read elimination off Sleeper directly: Sleeper clears a
-cut team's roster only after the fact, so a team eliminated Monday night still
-looks rostered on Tuesday morning. Cleared rosters are used to *confirm* earlier
-weeks, and any disagreement is logged as a warning.
+team as cut. It can't read elimination off Sleeper directly, and that signal has
+only got worse: by week 6 Sleeper was reporting rosters for four teams that had
+already been eliminated. The authoritative check is the rosters endpoint — a cut
+team ends up with zero players — and that is what confirmed the week 5 repair.
 
 Projections come from Sleeper's weekly projection endpoint and are scored with
 **this league's** settings rather than taken as a generic half-PPR number —
@@ -64,17 +79,24 @@ time it was checked — the logs are the record of runs. It's compared out befor
 deciding whether anything moved, because it holds today's date, so leaving it in
 meant every run on a new day looked like a change and committed one.
 
-Two guards keep a bad run from destroying good data:
+Three guards keep a bad run from destroying good data:
 
-- If the rebuild produces **fewer** weeks than `data.js` already holds — which
-  is what a not-yet-rolled-over Sleeper week counter looks like — it aborts and
-  leaves the file alone. Pass `--force` to override.
+- **Recorded weeks are never overwritten.** Every run still re-reads them and
+  compares, but only to *report*: any divergence is written to `drift.log`,
+  which is committed, so it turns up in a diff instead of in a log file nobody
+  opens. That is how the first corruption went unnoticed for a fortnight.
 - A week is only accepted once Sleeper has moved past it, so an in-progress
   Sunday is never recorded as final.
+- Eliminations already on file are inputs, not outputs. Who was alive in week 6
+  follows from the recorded cuts, so a mutated old score can't retroactively
+  resurrect or eliminate anybody.
 
-Team names in `data.js` are preserved verbatim across rebuilds; they're
-hand-curated and differ from Sleeper's own strings. `weeks`, `points`,
-`eliminated` and `generated` are regenerated.
+`--rebuild` discards every recorded week and re-reads them all. It exists for
+deliberate corrections and is **destructive** — on this league it will currently
+reintroduce the week 3 and week 5 corruption.
+
+Team names in `data.js` are preserved verbatim; they're hand-curated and differ
+from Sleeper's own strings.
 
 `lineups.js` is written alongside it, holding every team's starters and bench
 per week. It needs player *names*, which come from Sleeper's full player

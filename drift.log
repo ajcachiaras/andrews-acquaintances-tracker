@@ -1,0 +1,31 @@
+# Upstream drift
+
+Weeks are frozen once recorded, so this file is the record of Sleeper changing its mind about a finished week.
+
+## Checked 2026-10-14
+
+Sleeper now reports different scores for weeks already on file. The recorded values were kept.
+
+| Week | Team | Recorded | Sleeper now | Delta |
+|---|---|---|---|---|
+| 3 | Ray Rice's elevator pitch | 108.84 | 97.14 | -11.70 |
+| 3 | Tom Brady's Ladies | 102.26 | 98.06 | -4.20 |
+| 3 | John Elway's Caddy | 111.94 | 96.54 | -15.40 |
+| 3 | Aqib Talib's Starboard | 80.03 | 76.83 | -3.20 |
+| 3 | ChrisSnee's Father-in-law | 108.84 | 100.24 | -8.60 |
+| 3 | Russini's Side Piece | 79.33 | 73.53 | -5.80 |
+| 5 | Culpepper's Love Boat | 151.63 | 131.98 | -19.65 |
+| 5 | Jaxson Dart's ReachAround | 64.95 | 63.80 | -1.15 |
+| 5 | Ray Rice's elevator pitch | 123.39 | 111.74 | -11.65 |
+| 5 | Tom Brady's Ladies | 90.79 | 82.84 | -7.95 |
+| 5 | Jeff Garcia's Door Step | 91.95 | 79.90 | -12.05 |
+| 5 | Ladanians cousin | 83.25 | 62.80 | -20.45 |
+| 5 | McNabb's Camp Crush | 133.69 | 107.94 | -25.75 |
+| 5 | Baker's Wife's Husband | 84.21 | 57.06 | -27.15 |
+| 5 | John Elway's Caddy | 123.86 | 104.56 | -19.30 |
+| 5 | Aqib Talib's Starboard | 127.41 | 113.86 | -13.55 |
+| 5 | Naber's Brown Goat | 74.97 | 50.97 | -24.00 |
+| 5 | Russini's Side Piece | 91.95 | 82.95 | -9.00 |
+| 5 | Frank Gore's Spike Coach | 81.39 | 64.84 | -16.55 |
+| 5 | TB12's Never Around | 86.84 | 67.49 | -19.35 |
+| 5 | George Pickens' Worms | 103.50 | 100.05 | -3.45 |
