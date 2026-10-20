@@ -133,14 +133,10 @@ week's cutoff, every team's margin above it, and the chart and board from it.
   doesn't flatten everything else. The projection and the signed difference are
   printed next to the score, so the colour is never the only thing carrying it.
 
-Current through week 5.
+Current through week 6.
 
 | Week | Eliminated | Low score |
 |---|---|---|
-| 1 | Qadry Ismail's Womb | 60.21 |
-| 2 | Max's team | 46.47 |
-| 3 | lane's johnson's fluffer | 60.16 |
-| 4 | ChrisSnee's Father-in-law | 72.06 |
-| 5 | Naber's Brown Goat | 50.97 |
+| 6 | Ray Rice's elevator pitch | 59.78 |
 
 <!-- This section and data.js are rewritten by update_tracker.py; edit that script, not these lines. -->
