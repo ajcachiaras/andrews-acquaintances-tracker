@@ -133,10 +133,10 @@ week's cutoff, every team's margin above it, and the chart and board from it.
   doesn't flatten everything else. The projection and the signed difference are
   printed next to the score, so the colour is never the only thing carrying it.
 
-Current through week 7.
+Current through week 8.
 
 | Week | Eliminated | Low score |
 |---|---|---|
-| 7 | Naber's Brown Goat | 63.08 |
+| 8 | Russini's Side Piece | 95.81 |
 
 <!-- This section and data.js are rewritten by update_tracker.py; edit that script, not these lines. -->
