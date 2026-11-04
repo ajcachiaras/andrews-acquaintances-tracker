@@ -55,7 +55,21 @@ Naber's Brown Goat. The original rebuild-from-scratch design overwrote the
 correct history with the corrupted version, on both occasions, automatically.
 
 Each week it takes the lowest score among teams still alive and records that
-team as cut. It can't read elimination off Sleeper directly, and that signal has
+team as cut — unless the week is listed in `CUTS_PER_WEEK` at the top of the
+script, which says how many the guillotine takes. Week 8 is `2`. Add a week
+there when the league doubles up, and add a matching line to `notes` in
+`data.js` so the page explains itself.
+
+In a multi-cut week the **cutoff is the highest score that still got cut**, not
+the week's lowest — that is the line the survivors actually had to clear. In
+week 8 that makes it 106.10 rather than 95.81, and Baker's Wife's Husband
+survived by 0.36 rather than appearing to be 10.65 clear.
+
+Every run also reconciles the recorded cuts against Sleeper's rosters endpoint,
+where a cut team ends up with zero players. Unlike the matchup rows — which by
+week 6 were still listing rosters for four already-eliminated teams — that has
+held every time, and it is what identified week 8's second cut: nine empty
+rosters against eight recorded eliminations. A mismatch either way is logged. It can't read elimination off Sleeper directly, and that signal has
 only got worse: by week 6 Sleeper was reporting rosters for four teams that had
 already been eliminated. The authoritative check is the rosters endpoint — a cut
 team ends up with zero players — and that is what confirmed the week 5 repair.
@@ -124,6 +138,10 @@ week's cutoff, every team's margin above it, and the chart and board from it.
   clearing it.
 - **The board** — teams ranked low to high for whichever week you select,
   with each team's margin above that week's cutoff.
+- **Week notes** — a banner above the board, and inside the lineup sheet, for
+  weeks that didn't follow the usual rule. Week 8 was a **double elimination**:
+  the league cut the bottom two. Without the note that week reads as a bug —
+  Tom Brady's Ladies went out on 106.10 while the week's low was 95.81.
 - **Lineups** — click any team, on the board or on the chart, for that week's
   starting lineup with each player's points, the bench behind it, and how many
   points were left there. Close with the ×, Escape, or a click outside.

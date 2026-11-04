@@ -85,6 +85,14 @@ footer p{max-width:74ch;margin:0 0 8px}
 .row:focus-visible{outline:2px solid var(--safe);outline-offset:2px}
 .dot{cursor:pointer}
 .hint{color:var(--muted);font-size:.85rem;margin:0 2px 14px}
+.weeknote{display:flex;gap:9px;align-items:flex-start;margin:0 0 14px;padding:10px 13px;
+  border:1px solid var(--line);border-left:3px solid var(--danger);border-radius:6px;
+  background:#22312750;color:var(--ink);font-size:.88rem;max-width:68ch}
+.weeknote b{font-family:Oswald,sans-serif;font-weight:600;color:var(--danger);
+  letter-spacing:.03em;white-space:nowrap}
+.sheetnote{margin:14px 0 0;padding:9px 12px;border:1px solid var(--line);
+  border-left:3px solid var(--danger);border-radius:6px;background:#22312750;
+  color:var(--ink);font-size:.84rem}
 
 #sheet{position:fixed;inset:0;background:rgba(8,14,10,.74);z-index:10;
   display:none;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto}
@@ -158,6 +166,7 @@ footer p{max-width:74ch;margin:0 0 8px}
 <section aria-labelledby="db">
   <h2 id="db">The board</h2>
   <div class="weeksel" id="weeksel" role="group" aria-label="Choose a week"></div>
+  <p class="weeknote" id="weeknote" hidden></p>
   <p class="hint">Click any team — here or on the chart — for that week's lineup.</p>
   <div class="board" id="board"></div>
 </section>
@@ -177,6 +186,7 @@ footer p{max-width:74ch;margin:0 0 8px}
       <h2 id="sheet-title"></h2>
       <div class="sheettotal"><b id="sheet-total"></b> points <span id="sheet-status"></span></div>
     </div>
+    <p class="sheetnote" id="sheet-note" hidden></p>
     <h3>Starters</h3>
     <table class="lineup">
       <thead><tr><th class="slot"></th><th>Player</th><th class="proj">Proj</th><th class="pts">Pts</th></tr></thead>
@@ -205,10 +215,22 @@ const { weeks, teams, points } = LEAGUE_DATA;
 const teamIds = Object.keys(teams);
 
 // ---- derive per-week cutoffs, margins, elimination state ----
-const cutoff = weeks.map((_, wi) => {
+const weekNotes = LEAGUE_DATA.notes || {};
+// The cutoff is the highest score that still got cut — normally the week's
+// lowest, but in a double-elimination week it is the second lowest, which is
+// the line the survivors actually had to clear. Falls back to the lowest live
+// score for a week nobody has been cut from yet.
+const cutoff = weeks.map((wnum, wi) => {
+  const elim = LEAGUE_DATA.eliminated || {};
+  const cutScores = teamIds
+    .filter(id => elim[id] === wnum && points[id][wi] !== null && points[id][wi] !== undefined)
+    .map(id => points[id][wi]);
+  if (cutScores.length) return Math.max(...cutScores);
   const alive = teamIds.map(id => points[id][wi]).filter(v => v !== null && v !== undefined);
   return Math.min(...alive);
 });
+const cutCount = weeks.map(wnum =>
+  teamIds.filter(id => (LEAGUE_DATA.eliminated || {})[id] === wnum).length);
 const lastAliveWeek = {}; // index of last week a team has a score
 teamIds.forEach(id => {
   let last = -1;
@@ -398,7 +420,7 @@ svg.addEventListener('pointermove', e => {
   const id = dot.dataset.team, wi = +dot.dataset.week;
   const v = points[id][wi], margin = v - cutoff[wi];
   const eliminated = isEliminatedAt(id, wi);
-  tooltip.innerHTML = `<b>${teams[id]}</b>Week ${weeks[wi]}: ${v.toFixed(2)} pts<div class="m">${eliminated ? 'Eliminated — lowest score of the week' : (margin < 0.01 ? 'Lowest score this week' : margin.toFixed(2) + ' above the cutoff')}</div>`;
+  tooltip.innerHTML = `<b>${teams[id]}</b>Week ${weeks[wi]}: ${v.toFixed(2)} pts<div class="m">${eliminated ? (cutCount[wi] > 1 ? `Eliminated — bottom ${cutCount[wi]} this week` : 'Eliminated — lowest score of the week') : (margin < 0.01 ? 'Lowest score this week' : margin.toFixed(2) + ' above the cutoff')}</div>`;
   tooltip.style.left = (e.clientX + 16) + 'px';
   tooltip.style.top = (e.clientY + 16) + 'px';
   tooltip.style.opacity = 1;
@@ -420,6 +442,11 @@ weeks.forEach((wnum, wi) => {
 });
 
 function renderBoard(wi) {
+  const note = weekNotes[weeks[wi]];
+  const noteEl = document.getElementById('weeknote');
+  noteEl.hidden = !note;
+  if (note) noteEl.innerHTML = `<b>Week ${weeks[wi]}</b><span>${note}</span>`;
+
   const rows = teamIds
     .filter(id => points[id][wi] != null)
     .map(id => {
@@ -489,6 +516,13 @@ function openLineup(id, wi) {
   document.getElementById('sheet-title').textContent = teams[id];
   document.getElementById('sheet-total').textContent = fmt(score);
 
+  // Without this, a team cut in a double-elimination week reads as a mistake:
+  // Tom Brady's Ladies went out on 106.10 while 95.81 was the week's low.
+  const sheetNote = document.getElementById('sheet-note');
+  const wnote = weekNotes[week];
+  sheetNote.hidden = !wnote;
+  if (wnote) sheetNote.textContent = wnote;
+
   const status = document.getElementById('sheet-status');
   const margin = score - cutoff[wi];
   if (isEliminatedAt(id, wi)) {
@@ -497,6 +531,7 @@ function openLineup(id, wi) {
     status.style.color = 'var(--ink)';
   } else {
     status.textContent = `+${fmt(margin)} over the cutoff`;
+
     status.style.background = colorFor(margin, wi);
     status.style.color = '#12190F';
   }

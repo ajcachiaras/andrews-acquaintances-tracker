@@ -6,7 +6,10 @@
 const LEAGUE_DATA = {
   generated: "2026-11-03",
   weeks: [1, 2, 3, 4, 5, 6, 7, 8],
-  eliminated: {"10": 1, "17": 2, "12": 3, "14": 4, "2": 5, "3": 6, "13": 7, "15": 8},
+  eliminated: {"10": 1, "17": 2, "12": 3, "14": 4, "2": 5, "3": 6, "13": 7, "15": 8, "4": 8},
+  notes: {
+    "8": "Double elimination — the league cut the bottom two this week."
+  },
   teams: {
     "1":  "Culpepper's Love Boat",
     "2":  "Jaxson Dart's ReachAround",

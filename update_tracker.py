@@ -28,6 +28,11 @@ LEAGUE_ID = "1357848429371338752"
 API = "https://api.sleeper.app/v1"
 MAX_WEEK = 18
 
+# How many teams the guillotine takes in a given week. One, unless the league
+# says otherwise: week 8 of 2026 was a double elimination, the bottom two.
+# Keyed by week number; anything not listed cuts one.
+CUTS_PER_WEEK = {8: 2}
+
 SEASON = None  # set from Sleeper state during build()
 
 ROOT = Path(__file__).resolve().parent
@@ -270,7 +275,12 @@ def parse_data_js(text):
     if m:
         elim = {tid: int(w) for tid, w in re.findall(r'"(\d+)":\s*(\d+)', m.group(1))}
 
-    return header, teams_body, team_ids, existing_weeks, names, points, elim
+    # Per-week notes are hand-written league facts (a double elimination, a
+    # scoring correction), so they survive regeneration untouched.
+    m = re.search(r"\n  notes:\s*\{(.*?)\n  \},", text, re.S)
+    notes_body = m.group(1) if m else None
+
+    return header, teams_body, team_ids, existing_weeks, names, points, elim, notes_body
 
 
 def parse_lineups_js():
@@ -312,6 +322,30 @@ def check_drift(team_ids, names, recorded_weeks, recorded_points):
             if abs(now - was) > 0.02:
                 drift.append((w, tid, was, now))
     return drift
+
+
+def check_rosters(team_ids, names, elim):
+    """Compare the recorded cuts against the teams Sleeper has emptied.
+
+    A cut team ends up with zero players, and unlike the matchup rows (which by
+    week 6 were still listing rosters for four already-eliminated teams) this
+    has held every time. It is the check that would have caught week 8's second
+    cut on its own: nine empty rosters against eight recorded eliminations.
+    """
+    try:
+        rosters = get("/league/%s/rosters" % LEAGUE_ID)
+    except SystemExit:
+        log("WARNING: could not read rosters to cross-check eliminations.")
+        return []
+    empty = {str(r["roster_id"]) for r in rosters if not (r.get("players") or [])}
+    out = []
+    for tid in sorted(empty - set(elim), key=int):
+        out.append("%s has an empty roster on Sleeper but is not recorded as cut -- "
+                   "a week may have taken more teams than expected." % names.get(tid, tid))
+    for tid in sorted(set(elim) - empty, key=int):
+        out.append("%s is recorded as cut in week %d but still holds players on Sleeper."
+                   % (names.get(tid, tid), elim[tid]))
+    return out
 
 
 def build(team_ids, names, recorded_weeks, recorded_points, recorded_elim):
@@ -364,22 +398,33 @@ def build(team_ids, names, recorded_weeks, recorded_points, recorded_elim):
         for tid in team_ids:
             points[tid].append(round(live[tid], 2) if tid in alive else None)
 
-        low = min(live.values())
-        cut = sorted(tid for tid, s in live.items() if s == low)
-        if len(cut) > 1:
+        # Lowest first; roster id breaks a tie only so the result is stable.
+        order = sorted(live.items(), key=lambda kv: (kv[1], int(kv[0])))
+        n_cuts = min(CUTS_PER_WEEK.get(w, 1), len(order) - 1)
+        if n_cuts < CUTS_PER_WEEK.get(w, 1):
+            warnings.append("week %d: asked for %d cuts but only %d teams were alive."
+                            % (w, CUTS_PER_WEEK.get(w, 1), len(order)))
+        # A tie straddling the survival line is the one the league has to settle.
+        if len(order) > n_cuts and abs(order[n_cuts - 1][1] - order[n_cuts][1]) < 0.005:
             warnings.append(
-                "week %d: TIE at %.2f between %s -- took roster %s; check the league tiebreaker"
-                % (w, low, ", ".join(names.get(t, t) for t in cut), cut[0]))
-        victim = cut[0]
-        alive.discard(victim)
-        eliminations.append((w, victim, low))
-        log("week %d: low %.2f -- %s eliminated (%d left)"
-            % (w, low, names.get(victim, victim), len(alive)))
+                "week %d: TIE at %.2f on the cut line between %s and %s -- took %s; "
+                "check the league tiebreaker"
+                % (w, order[n_cuts - 1][1], names.get(order[n_cuts - 1][0]),
+                   names.get(order[n_cuts][0]), names.get(order[n_cuts - 1][0])))
+
+        for tid, low in order[:n_cuts]:
+            alive.discard(tid)
+            eliminations.append((w, tid, low))
+        log("week %d: %s -- %s (%d left)"
+            % (w,
+               "double elimination" if n_cuts > 1 else "low %.2f" % order[0][1],
+               ", ".join("%s %.2f" % (names.get(t, t), s) for t, s in order[:n_cuts]),
+               len(alive)))
 
     return weeks, points, eliminations, warnings, rows_by_week
 
 
-def render_data_js(header, teams_body, team_ids, weeks, points, eliminations):
+def render_data_js(header, teams_body, team_ids, weeks, points, eliminations, notes_body=None):
     lines = [header.rstrip("\n"), "", "const LEAGUE_DATA = {"]
     lines.append('  generated: "%s",' % date.today().isoformat())
     lines.append("  weeks: [%s]," % ", ".join(str(w) for w in weeks))
@@ -388,6 +433,8 @@ def render_data_js(header, teams_body, team_ids, weeks, points, eliminations):
     # tell "lowest score, eliminated" from "lowest score, survived" on its own.
     elim = ", ".join('"%s": %d' % (tid, w) for w, tid, _ in eliminations)
     lines.append("  eliminated: {%s}," % elim)
+    if notes_body is not None:
+        lines.append("  notes: {" + notes_body + "\n  },")
     lines.append("  teams: {" + teams_body + "\n  },")
     lines.append("  points: {")
     for i, tid in enumerate(team_ids):
@@ -440,7 +487,7 @@ def main():
 
     text = DATA_JS.read_text(encoding="utf-8")
     (header, teams_body, team_ids, recorded_weeks, names,
-     recorded_points, recorded_elim) = parse_data_js(text)
+     recorded_points, recorded_elim, notes_body) = parse_data_js(text)
     recorded_lineups = parse_lineups_js()
 
     if rebuild:
@@ -464,6 +511,12 @@ def main():
     for w in warnings:
         log("WARNING: " + w)
 
+    final_elim = dict(recorded_elim)
+    for w, tid, _ in eliminations:
+        final_elim[tid] = w
+    for msg in check_rosters(team_ids, names, final_elim):
+        log("WARNING: " + msg)
+
     # Recorded weeks first, then anything that finished since.
     weeks = recorded_weeks + new_weeks
     if not weeks:
@@ -478,7 +531,7 @@ def main():
         elim_all.append((w, tid, low if low is not None else 0.0))
     elim_all += list(eliminations)
 
-    new_data = render_data_js(header, teams_body, team_ids, weeks, points, elim_all)
+    new_data = render_data_js(header, teams_body, team_ids, weeks, points, elim_all, notes_body)
 
     # Compare without the date stamp. It is today's date, so leaving it in the
     # comparison means a run on any new day always "differs" and commits --
