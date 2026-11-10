@@ -151,10 +151,10 @@ week's cutoff, every team's margin above it, and the chart and board from it.
   doesn't flatten everything else. The projection and the signed difference are
   printed next to the score, so the colour is never the only thing carrying it.
 
-Current through week 8.
+Current through week 9.
 
 | Week | Eliminated | Low score |
 |---|---|---|
-| 8 | Russini's Side Piece | 95.81 |
+| 9 | Culpepper's Love Boat | 77.90 |
 
 <!-- This section and data.js are rewritten by update_tracker.py; edit that script, not these lines. -->
